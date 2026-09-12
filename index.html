@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Excel to exact GPS OOH site map generator" />
+  <title>Excel to OOH Site Map</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">ADINN OOH MAP TOOL</p>
+        <h1>Excel to Exact GPS Site Map</h1>
+        <p class="subtitle">Static HTML + JavaScript. Exact Lat/Long anchors, compact callouts, readable site table.</p>
+      </div>
+      <a class="template-link" href="sample_input.xlsx" download>Download sample Excel</a>
+    </header>
+
+    <section class="workspace">
+      <aside class="control-panel">
+        <div class="panel-section">
+          <label class="section-label">1. Upload Excel</label>
+          <label class="drop-zone" id="dropZone" for="fileInput">
+            <input id="fileInput" type="file" accept=".xlsx,.xlsm,.xls" hidden />
+            <span class="drop-icon">⇧</span>
+            <strong>Choose Excel file</strong>
+            <small>or drag and drop here</small>
+          </label>
+          <div id="fileMeta" class="file-meta hidden"></div>
+        </div>
+
+        <div class="panel-section hidden" id="sheetSection">
+          <label class="section-label" for="sheetSelect">2. Select sheet</label>
+          <select id="sheetSelect"></select>
+        </div>
+
+        <div class="panel-section hidden" id="settingsSection">
+          <label class="section-label">3. Output settings</label>
+
+          <label class="field-label" for="sizeSelect">Output size</label>
+          <select id="sizeSelect">
+            <option value="1920x1080" selected>1920 × 1080</option>
+            <option value="1600x900">1600 × 900</option>
+            <option value="2560x1440">2560 × 1440</option>
+          </select>
+
+          <label class="check-row">
+            <input type="checkbox" id="highlightLast" checked />
+            <span>Highlight last site in red</span>
+          </label>
+
+          <label class="field-label" for="extraHighlights">Extra red S.No values</label>
+          <input id="extraHighlights" type="text" placeholder="Example: 7, 12" />
+
+          <button id="generateBtn" class="primary-btn" type="button">Generate exact GPS map</button>
+          <button id="downloadBtn" class="secondary-btn hidden" type="button">Download PNG</button>
+        </div>
+
+        <div id="statusBox" class="status-box hidden" role="status"></div>
+
+        <div class="accuracy-card">
+          <strong>Exact GPS rule</strong>
+          <p>The arrow tip is fixed to the Excel Latitude/Longitude. Only the numbered bubble can move for readability.</p>
+        </div>
+      </aside>
+
+      <section class="preview-panel">
+        <div class="preview-header">
+          <div>
+            <span class="section-label">Preview</span>
+            <span id="rowCount" class="row-count"></span>
+          </div>
+          <div id="renderInfo" class="render-info">Upload an Excel file to begin.</div>
+        </div>
+
+        <div id="canvasStage" class="canvas-stage empty">
+          <div id="emptyState" class="empty-state">
+            <div class="empty-pin">●</div>
+            <h2>Your map will appear here</h2>
+            <p>Required columns: S.No, City, Media, Area Name, Location, W, H, Lat, Long.</p>
+          </div>
+          <canvas id="mapCanvas" width="1920" height="1080" class="hidden"></canvas>
+        </div>
+
+        <div id="dataPreview" class="data-preview hidden">
+          <div class="data-preview-title">Excel preview</div>
+          <div class="table-scroll">
+            <table id="previewTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
