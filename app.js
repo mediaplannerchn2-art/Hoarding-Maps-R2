@@ -28,6 +28,9 @@
     fileName: '',
     generated: false,
     lastBlob: null,
+    selectedIds: new Set(),
+    visibleRows: [],
+    outputMode: 'client',
     tileCache: new Map(),
   };
 
@@ -41,6 +44,22 @@
   const sizeSelect = $('sizeSelect');
   const highlightLast = $('highlightLast');
   const extraHighlights = $('extraHighlights');
+  const outputMode = $('outputMode');
+  const searchInput = $('searchInput');
+  const cityFilter = $('cityFilter');
+  const mediaFilter = $('mediaFilter');
+  const areaFilter = $('areaFilter');
+  const selectAllBtn = $('selectAllBtn');
+  const clearSelectionBtn = $('clearSelectionBtn');
+  const selectionInfo = $('selectionInfo');
+  const resetBtn = $('resetBtn');
+  const downloadExcelBtn = $('downloadExcelBtn');
+  const dashboard = $('dashboard');
+  const metricTotal = $('metricTotal');
+  const metricVisible = $('metricVisible');
+  const metricSelected = $('metricSelected');
+  const metricCities = $('metricCities');
+  const metricGps = $('metricGps');
   const generateBtn = $('generateBtn');
   const downloadBtn = $('downloadBtn');
   const statusBox = $('statusBox');
@@ -172,33 +191,75 @@
       .map(([key, labels]) => ({ key, labels }));
   }
 
-  function updateDataPreview(rows) {
+  function rowId(row, index) {
+    return `${formatCell(row['S.No'])}__${row.Lat.toFixed(7)}__${row.Long.toFixed(7)}__${index}`;
+  }
+
+  function populateFilters(rows) {
+    const fill = (select, values, label) => {
+      const current = select.value;
+      select.innerHTML = `<option value="">All ${label}</option>`;
+      [...new Set(values.filter(Boolean).map(formatCell))].sort((a, b) => a.localeCompare(b, undefined, {numeric:true})).forEach((value) => {
+        const option = document.createElement('option'); option.value = value; option.textContent = value; select.appendChild(option);
+      });
+      if ([...select.options].some((o) => o.value === current)) select.value = current;
+    };
+    fill(cityFilter, rows.map(r => r.City), 'cities');
+    fill(mediaFilter, rows.map(r => r.Media), 'media');
+    fill(areaFilter, rows.map(r => r['Area Name']), 'areas');
+  }
+
+  function getFilteredRows() {
+    const q = normalizeName(searchInput.value);
+    const city = cityFilter.value;
+    const media = mediaFilter.value;
+    const area = areaFilter.value;
+    return state.rows.filter((row, index) => {
+      const hay = normalizeName([row['S.No'], row.City, row.Media, row['Area Name'], row.Location, row.W, row.H].join(' '));
+      return (!q || hay.includes(q)) && (!city || formatCell(row.City) === city) && (!media || formatCell(row.Media) === media) && (!area || formatCell(row['Area Name']) === area);
+    }).map(row => ({row, index: state.rows.indexOf(row)}));
+  }
+
+  function updateDashboard(visibleRows) {
+    const selectedCount = state.rows.filter((row, i) => state.selectedIds.has(rowId(row, i))).length;
+    metricTotal.textContent = state.rows.length;
+    metricVisible.textContent = visibleRows.length;
+    metricSelected.textContent = selectedCount;
+    metricCities.textContent = new Set(state.rows.map(r => formatCell(r.City)).filter(Boolean)).size;
+    metricGps.textContent = state.rows.filter(r => Number.isFinite(r.Lat) && Number.isFinite(r.Long)).length;
+    selectionInfo.textContent = `${selectedCount} selected`;
+    dashboard.classList.remove('hidden');
+    downloadExcelBtn.classList.toggle('hidden', selectedCount === 0);
+  }
+
+  function updateDataPreview(rows = null) {
+    const filtered = rows || getFilteredRows();
+    state.visibleRows = filtered.map(item => item.row);
     const thead = previewTable.querySelector('thead');
     const tbody = previewTable.querySelector('tbody');
-    thead.innerHTML = '';
-    tbody.innerHTML = '';
-
+    thead.innerHTML = ''; tbody.innerHTML = '';
     const trh = document.createElement('tr');
-    CANONICAL_COLUMNS.forEach((col) => {
-      const th = document.createElement('th');
-      th.textContent = col;
-      trh.appendChild(th);
-    });
-    thead.appendChild(trh);
+    const selectTh = document.createElement('th'); selectTh.className = 'select-cell'; selectTh.textContent = '✓'; trh.appendChild(selectTh);
+    CANONICAL_COLUMNS.forEach((col) => { const th = document.createElement('th'); th.textContent = col; trh.appendChild(th); });
+    const mapTh = document.createElement('th'); mapTh.textContent = 'Map'; trh.appendChild(mapTh); thead.appendChild(trh);
 
-    rows.slice(0, 100).forEach((row) => {
+    filtered.slice(0, 500).forEach(({row, index}) => {
       const tr = document.createElement('tr');
-      CANONICAL_COLUMNS.forEach((col) => {
-        const td = document.createElement('td');
-        td.textContent = formatCell(row[col]);
-        tr.appendChild(td);
-      });
+      const id = rowId(row, index); if (state.selectedIds.has(id)) tr.classList.add('row-selected');
+      const tdSelect = document.createElement('td'); tdSelect.className='select-cell';
+      const cb = document.createElement('input'); cb.type='checkbox'; cb.checked=state.selectedIds.has(id); cb.setAttribute('aria-label', `Select S.No ${formatCell(row['S.No'])}`);
+      cb.addEventListener('change', () => { cb.checked ? state.selectedIds.add(id) : state.selectedIds.delete(id); updateDataPreview(); });
+      tdSelect.appendChild(cb); tr.appendChild(tdSelect);
+      CANONICAL_COLUMNS.forEach((col) => { const td=document.createElement('td'); td.textContent=formatCell(row[col]); tr.appendChild(td); });
+      const mapTd=document.createElement('td'); const a=document.createElement('a'); a.className='gps-link'; a.target='_blank'; a.rel='noopener'; a.href=`https://www.google.com/maps?q=${row.Lat},${row.Long}`; a.textContent='Open'; mapTd.appendChild(a); tr.appendChild(mapTd);
       tbody.appendChild(tr);
     });
-
     dataPreview.classList.remove('hidden');
-    rowCount.textContent = `${rows.length} site${rows.length === 1 ? '' : 's'}`;
+    rowCount.textContent = `${filtered.length} visible / ${state.rows.length} total`;
+    updateDashboard(filtered);
   }
+
+  function applyFilters() { updateDataPreview(); }
 
   async function handleFile(file) {
     if (!file) return;
@@ -241,7 +302,10 @@
       const name = sheetSelect.value || state.workbook.SheetNames[0];
       const rows = normalizeSheet(state.workbook.Sheets[name]);
       state.rows = rows;
-      updateDataPreview(rows);
+      state.selectedIds = new Set(rows.map((row, i) => rowId(row, i)));
+      searchInput.value = ''; cityFilter.value = ''; mediaFilter.value = ''; areaFilter.value = '';
+      populateFilters(rows);
+      updateDataPreview();
 
       const duplicates = duplicateCoordinateGroups(rows);
       if (duplicates.length) {
@@ -857,6 +921,24 @@
     context.stroke();
   }
 
+  function drawInternalGpsFooter(context, rows, width, height) {
+    if (state.outputMode !== 'internal') return;
+    const lines = rows.map(r => `S.No ${formatCell(r['S.No'])}: ${r.Lat.toFixed(7)}, ${r.Long.toFixed(7)}`);
+    const fontSize = Math.max(10, Math.round(height * 0.0105));
+    context.font = `600 ${fontSize}px Arial, Helvetica, sans-serif`;
+    context.fillStyle = 'rgba(255,255,255,.90)';
+    const maxLines = Math.min(lines.length, 6);
+    const shown = lines.slice(0, maxLines);
+    const boxW = Math.min(width * .46, Math.max(260, width * .25));
+    const boxH = shown.length * (fontSize + 5) + 14;
+    const x = 12, y = height - boxH - 10;
+    context.fillRect(x, y, boxW, boxH);
+    context.fillStyle = NAVY;
+    context.textAlign='left'; context.textBaseline='top';
+    shown.forEach((line,i)=>context.fillText(line, x+8, y+7+i*(fontSize+5)));
+    if (lines.length > maxLines) context.fillText(`+ ${lines.length-maxLines} more sites`, x+8, y+7+maxLines*(fontSize+5));
+  }
+
   function drawOsmAttribution(context, width, height) {
     const text = 'Map data © OpenStreetMap contributors';
     const fontSize = Math.max(11, Math.round(height * 0.0105));
@@ -994,6 +1076,7 @@
     });
 
     drawTable(ctx, rows, highlightLabels, width, height);
+    drawInternalGpsFooter(ctx, rows, width, height);
     drawOsmAttribution(ctx, width, height);
     ctx.restore();
   }
@@ -1005,9 +1088,11 @@
     }
 
     const [width, height] = sizeSelect.value.split('x').map(Number);
+    const selectedRows = state.rows.filter((row, i) => state.selectedIds.has(rowId(row, i)));
+    const rowsToRender = selectedRows.length ? selectedRows : state.rows;
     const highlights = parseHighlights(extraHighlights.value);
-    if (highlightLast.checked && state.rows.length) {
-      highlights.add(formatCell(state.rows[state.rows.length - 1]['S.No']));
+    if (highlightLast.checked && rowsToRender.length) {
+      highlights.add(formatCell(rowsToRender[rowsToRender.length - 1]['S.No']));
     }
 
     generateBtn.disabled = true;
@@ -1017,7 +1102,7 @@
     renderInfo.textContent = 'Preparing map…';
 
     try {
-      await renderMap(state.rows, width, height, highlights);
+      await renderMap(rowsToRender, width, height, highlights);
       emptyState.classList.add('hidden');
       canvas.classList.remove('hidden');
       canvasStage.classList.remove('empty');
@@ -1027,7 +1112,7 @@
       });
       state.generated = true;
       downloadBtn.classList.remove('hidden');
-      renderInfo.textContent = `${width} × ${height} • Exact GPS callout map`;
+      renderInfo.textContent = `${width} × ${height} • ${rowsToRender.length} sites • ${outputMode.value === 'client' ? 'Client' : 'Internal'} mode`;
       showStatus(`Map generated successfully at ${width} × ${height}.`, 'success');
     } catch (error) {
       console.error(error);
@@ -1048,17 +1133,47 @@
     const a = document.createElement('a');
     const base = state.fileName ? state.fileName.replace(/\.[^.]+$/, '') : 'site_location_map';
     a.href = url;
-    a.download = `${base}_site_location_map.png`;
+    a.download = `${base}_${state.selectedIds.size ? 'selected_' : ''}site_location_map.png`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
   }
 
+  function exportSelectedExcel() {
+    if (!state.rows.length || typeof XLSX === 'undefined') return;
+    const selected = state.rows.filter((row, i) => state.selectedIds.has(rowId(row, i)));
+    if (!selected.length) return;
+    const data = selected.map(row => ({
+      'S.No': row['S.No'], City: row.City, Media: row.Media, 'Area Name': row['Area Name'], Location: row.Location,
+      W: row.W, H: row.H, Lat: row.Lat, Long: row.Long,
+      'Google Maps': `https://www.google.com/maps?q=${row.Lat},${row.Long}`
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Selected Sites');
+    const base = state.fileName ? state.fileName.replace(/\.[^.]+$/, '') : 'OOH_Sites';
+    XLSX.writeFile(wb, `${base}_selected_sites.xlsx`);
+  }
+
+  function resetApp() {
+    state.workbook = null; state.rows = []; state.selectedIds = new Set(); state.lastBlob = null; state.visibleRows = [];
+    fileInput.value=''; fileMeta.classList.add('hidden'); sheetSection.classList.add('hidden'); settingsSection.classList.add('hidden');
+    dashboard.classList.add('hidden'); dataPreview.classList.add('hidden'); downloadBtn.classList.add('hidden'); downloadExcelBtn.classList.add('hidden');
+    emptyState.classList.remove('hidden'); canvas.classList.add('hidden'); canvasStage.classList.add('empty'); rowCount.textContent=''; renderInfo.textContent='Upload an Excel file to begin.'; hideStatus();
+  }
+
   fileInput.addEventListener('change', (event) => handleFile(event.target.files?.[0]));
   sheetSelect.addEventListener('change', parseSelectedSheet);
   generateBtn.addEventListener('click', generate);
   downloadBtn.addEventListener('click', downloadPng);
+  downloadExcelBtn.addEventListener('click', exportSelectedExcel);
+  resetBtn.addEventListener('click', resetApp);
+  [searchInput, cityFilter, mediaFilter, areaFilter].forEach((el) => el.addEventListener('input', applyFilters));
+  [cityFilter, mediaFilter, areaFilter].forEach((el) => el.addEventListener('change', applyFilters));
+  selectAllBtn.addEventListener('click', () => { getFilteredRows().forEach(({row,index}) => state.selectedIds.add(rowId(row,index))); updateDataPreview(); });
+  clearSelectionBtn.addEventListener('click', () => { state.selectedIds.clear(); updateDataPreview(); });
+  outputMode.addEventListener('change', () => { state.outputMode = outputMode.value; });
 
   ['dragenter', 'dragover'].forEach((eventName) => {
     dropZone.addEventListener(eventName, (event) => {

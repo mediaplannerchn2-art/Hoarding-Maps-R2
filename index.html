@@ -13,9 +13,9 @@
       <div>
         <p class="eyebrow">ADINN OOH MAP TOOL</p>
         <h1>Excel to Exact GPS Site Map</h1>
-        <p class="subtitle">Static HTML + JavaScript. Exact Lat/Long anchors, compact callouts, readable site table.</p>
+        <p class="subtitle">OOH site planning workspace — Excel → validate → filter → select → exact GPS map → client-ready export.</p>
       </div>
-      <a class="template-link" href="sample_input.xlsx" download>Download sample Excel</a>
+      <div class="top-actions"><a class="template-link" href="sample_input.xlsx" download>Download sample Excel</a><button id="resetBtn" class="ghost-btn" type="button">Reset</button></div>
     </header>
 
     <section class="workspace">
@@ -37,7 +37,16 @@
         </div>
 
         <div class="panel-section hidden" id="settingsSection">
-          <label class="section-label">3. Output settings</label>
+          <label class="section-label">3. Filter & select sites</label>
+          <div class="filter-grid">
+            <label class="field-label">Search<input id="searchInput" type="search" placeholder="Location, area, media, S.No…" /></label>
+            <label class="field-label">City<select id="cityFilter"><option value="">All cities</option></select></label>
+            <label class="field-label">Media<select id="mediaFilter"><option value="">All media</option></select></label>
+            <label class="field-label">Area<select id="areaFilter"><option value="">All areas</option></select></label>
+          </div>
+          <div class="selection-bar"><span id="selectionInfo">0 selected</span><div><button id="selectAllBtn" class="mini-btn" type="button">Select all</button><button id="clearSelectionBtn" class="mini-btn" type="button">Clear</button></div></div>
+
+          <label class="section-label settings-label">4. Output settings</label>
 
           <label class="field-label" for="sizeSelect">Output size</label>
           <select id="sizeSelect">
@@ -51,11 +60,14 @@
             <span>Highlight last site in red</span>
           </label>
 
+          <label class="field-label" for="outputMode">Output mode</label>
+          <select id="outputMode"><option value="client" selected>Client — clean site details</option><option value="internal">Internal — include GPS</option></select>
+
           <label class="field-label" for="extraHighlights">Extra red S.No values</label>
           <input id="extraHighlights" type="text" placeholder="Example: 7, 12" />
 
           <button id="generateBtn" class="primary-btn" type="button">Generate exact GPS map</button>
-          <button id="downloadBtn" class="secondary-btn hidden" type="button">Download PNG</button>
+          <div class="button-row"><button id="downloadBtn" class="secondary-btn hidden" type="button">Download PNG</button><button id="downloadExcelBtn" class="secondary-btn hidden" type="button">Export selected Excel</button></div>
         </div>
 
         <div id="statusBox" class="status-box hidden" role="status"></div>
@@ -67,6 +79,14 @@
       </aside>
 
       <section class="preview-panel">
+        <div id="dashboard" class="dashboard hidden">
+          <div class="metric"><strong id="metricTotal">0</strong><span>Total sites</span></div>
+          <div class="metric"><strong id="metricVisible">0</strong><span>Visible</span></div>
+          <div class="metric"><strong id="metricSelected">0</strong><span>Selected</span></div>
+          <div class="metric"><strong id="metricCities">0</strong><span>Cities</span></div>
+          <div class="metric"><strong id="metricGps">0</strong><span>Valid GPS</span></div>
+        </div>
+
         <div class="preview-header">
           <div>
             <span class="section-label">Preview</span>
@@ -85,7 +105,7 @@
         </div>
 
         <div id="dataPreview" class="data-preview hidden">
-          <div class="data-preview-title">Excel preview</div>
+          <div class="data-preview-title"><span>Site inventory</span><span class="preview-hint">Select sites to generate only the required locations.</span></div>
           <div class="table-scroll">
             <table id="previewTable">
               <thead></thead>
